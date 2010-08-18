@@ -9,60 +9,65 @@ class AppController(rend.Page):
     addSlash = True
     controllers = {}
 
+    def splitPath(self, segments):
+        action = 'index'
+        if len(segments) > 1:
+            action = segments[1]
+            
+        id = None
+        if len(segments) > 2:
+            id = segments[2]
+
+        return (segments[0], action, id)
+    
+
     def locateChild(self, ctx, segments):
         if len(segments) == 0:
             return rend.NotFound
-        
-        contname = segments[0]
-        if not BaseController.controllers.has_key(contname):
+
+        contname, action, id = self.splitPath(segments)
+        if not AppController.controllers.has_key(contname):
             return rend.NotFound
-        cont = BaseController.controllers[contname]
+        contklass = AppController.controllers[contname]
+        controller = contklass(action, id)
 
-        cont.action = 'index'
-        if len(segments) > 1:
-            cont.action = segments[1]
+        if hasattr(controller, action) and callable(getattr(controller, action)):
+            return getattr(controller, action).__call__(ctx, id), ""
             
-        cont.id = None
-        if len(segments) > 2:
-            cont.id = segments[2]
-
-        if hasattr(cont, action) and callable(getattr(cont, action)):
-            return getattr(cont, cont.action).__call__(ctx, cont.id), ""
         return rend.NotFound
 
 
-class BaseController(rend.Page):
-    viewsdir = "."
-    viewcache = {}
 
-    def __init__(self, name):
-        self.name = name
+class BaseController(rend.Page):
+    addSlash = True
+
+    def __init__(self, action, id):
+        self.action = action
+        self.id = id
         
 
     @classmethod
-    def addController(klass):
+    def addController(klass, *paths):
         name = klass.__name__[:-10].lower()
-        if not AppController.controllers.has_key(name):
-            AppController.controllers[name] = klass(name)
+        AppController.controllers[name] = klass        
+        for path in paths:
+            AppController.controllers[path] = klass
+        
 
 
-    def view(self, action=None):
-        action = action or self.action
-        klass = self.__class__
-        path = os.path.join(klass.viewsdir, self.name, action)
-        if os.path.exists(path):
-            klass.viewcache[path] = loaders.xmlfile(
-        
-        
 class TestController(BaseController):
     def index(self, ctx, id):
         return loaders.xmlfile('test.xml').load(ctx)[0]
 
-TestController.addController()
+    def show(self, ctx, id):
+        return tags.html[tags.body["id is: %s" % str(id)]]
+
+    
+TestController.addController('test', 'blah')
 
 
 application = service.Application('pubsubin')
-site = appserver.NevowSite(TestController())
+site = appserver.NevowSite(AppController())
 webServer = internet.TCPServer(8080, site)
 webServer.setServiceParent(application)
 
