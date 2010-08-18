@@ -1,4 +1,4 @@
-from nevow import rend
+from nevow import rend, inevow
 
 class AppController(rend.Page):
     addSlash = True
@@ -24,7 +24,7 @@ class AppController(rend.Page):
         if not AppController.controllers.has_key(contname):
             return rend.NotFound
         contklass = AppController.controllers[contname]
-        controller = contklass(action, id)
+        controller = contklass(ctx, contname, action, id)
 
         if hasattr(controller, action) and callable(getattr(controller, action)):
             return getattr(controller, action).__call__(ctx, id), ""
@@ -33,7 +33,9 @@ class AppController(rend.Page):
 
 
 class BaseController(rend.Page):
-    def __init__(self, action, id):
+    def __init__(self, ctx, name, action, id):
+        self.name = name
+        self.ctx = ctx
         self.action = action
         self.id = id
         
@@ -44,3 +46,17 @@ class BaseController(rend.Page):
         AppController.controllers[name] = klass        
         for path in paths:
             AppController.controllers[path] = klass
+
+
+    def path(self, controller=None, action=None, id=None):
+        controller = controller or self.name
+        action = action or self.action
+        
+        url = inevow.IRequest(self.ctx).URLPath().child(controller).child(action)
+        if id is not None:
+            url = url.child(str(id))
+            
+        return url
+        
+            
+            

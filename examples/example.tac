@@ -9,11 +9,11 @@ class TestController(BaseController):
         return loaders.stan(tags.html[tags.body["index id is: %s" % str(id)]]).load(ctx)[0]
 
     def show(self, ctx, id):
-        return loaders.stan(tags.html[tags.body["show id is: %s" % str(id)]]).load(ctx)[0]
+        t = tags.html[tags.body[self.path(controller="user", action="show", id=123)]]
+        return loaders.stan(t).load(ctx)[0]
 
     
 TestController.addController('test', 'blah', '')
-
 
 application = service.Application('pubsubin')
 site = appserver.NevowSite(AppController())
