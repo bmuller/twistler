@@ -1,6 +1,6 @@
 from twisted.application import service, internet
 
-from twistler.controllers import BaseController, AppController
+from twistler.controllers import BaseController, AppController, StaticController
 
 from nevow import tags, loaders, appserver
 
@@ -11,9 +11,15 @@ class TestController(BaseController):
     def show(self, ctx, id):
         t = tags.html[tags.body[self.path(controller="user", action="show", id=123)]]
         return loaders.stan(t).load(ctx)[0]
-
     
-TestController.addController('test', 'blah', '')
+AppController.addController(TestController, ['', 'test'])
+
+
+class CSSController(StaticController):
+    PATH = "examples/static"
+
+AppController.addController(CSSController)
+
 
 application = service.Application('pubsubin')
 site = appserver.NevowSite(AppController())

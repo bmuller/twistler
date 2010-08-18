@@ -1,51 +1,49 @@
-from nevow import rend, inevow
+from nevow import rend, inevow, static
+
 
 class AppController(rend.Page):
     addSlash = True
-    controllers = {}
+    controllers = {}   
 
-    def splitPath(self, segments):
-        action = 'index'
-        if len(segments) > 1 and segments[1] != '':
-            action = segments[1]
-            
-        id = None
-        if len(segments) > 2:
-            id = segments[2]
+    @classmethod
+    def addController(appklass, klass, paths=None):
+        name = klass.__name__[:-10].lower()
+        AppController.controllers[name] = klass        
+        paths = paths or []
+        for path in paths:
+            AppController.controllers[path] = klass
 
-        return (segments[0], action, id)
-    
 
     def locateChild(self, ctx, segments):
         if len(segments) == 0:
             return rend.NotFound
 
-        contname, action, id = self.splitPath(segments)
+        contname = segments[0]
         if not AppController.controllers.has_key(contname):
             return rend.NotFound
-        contklass = AppController.controllers[contname]
-        controller = contklass(ctx, contname, action, id)
-
-        if hasattr(controller, action) and callable(getattr(controller, action)):
-            return getattr(controller, action).__call__(ctx, id), ""
-        return rend.NotFound
-
-
-
-class BaseController(rend.Page):
-    def __init__(self, ctx, name, action, id):
-        self.name = name
-        self.ctx = ctx
-        self.action = action
-        self.id = id
         
+        contklass = AppController.controllers[contname]
+        return contklass(segments)._render(ctx)
 
-    @classmethod
-    def addController(klass, *paths):
-        name = klass.__name__[:-10].lower()
-        AppController.controllers[name] = klass        
-        for path in paths:
-            AppController.controllers[path] = klass
+
+
+class BaseController:
+    def __init__(self, segments):
+        self.segments = segments
+        self.action = 'index'
+        if len(segments) > 1 and segments[1] != '':
+            self.action = segments[1]
+            
+        self.id = None
+        if len(segments) > 2:
+            self.id = segments[2]
+
+
+    def _render(self, ctx):
+        func = getattr(self, self.action, None)
+        if func is not None and callable(func):
+            return func(ctx, self.id), ""
+        return rend.NotFound
 
 
     def path(self, controller=None, action=None, id=None):
@@ -58,5 +56,15 @@ class BaseController(rend.Page):
             
         return url
         
-            
-            
+
+
+class StaticController(BaseController):
+    PATH = "."
+    KWARGS = {}
+    
+    def _render(self, ctx):
+       f = static.File(self.__class__.PATH, **self.__class__.KWARGS)
+       if len(self.segments) > 1:
+           return f.locateChild(ctx, self.segments[1:])
+       return f.locateChild(ctx, [''])
+        
