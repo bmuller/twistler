@@ -1,18 +1,41 @@
 from nevow import rend, inevow, static
 from twisted.web.util import Redirect
-
+from mako.lookup import TemplateLookup
+import os
 
 class AppController(rend.Page):
     addSlash = True
-    controllers = {}   
+    
+    def __init__(self, viewsDir="views", templateCacheDir=None):
+        """
+        Don't cache by default.
+        """
+        # this is the root of our views
+        self.viewsDir = viewsDir
+        self.templateDirs = [viewsDir]
+        self.templateCacheDir = templateCacheDir
+        self.addViewDir('layout')
+        self.controllers = {}
+        
 
-    @classmethod
-    def addController(appklass, klass, paths=None):
+    def addViewDir(self, dir):
+        self.templateDirs.append(os.path.join(self.viewsDir, dir))
+        self.tlookup = TemplateLookup(directories=self.templateDirs, module_directory=self.templateCacheDir)
+        
+
+    def addController(self, klass, paths=None, viewDir=None):
+        """
+        viewDir will be relative to the viewsDir param in the constructor.
+        """
         name = klass.__name__[:-10].lower()
-        AppController.controllers[name] = klass        
+        self.controllers[name] = klass        
         paths = paths or []
         for path in paths:
-            AppController.controllers[path] = klass
+            self.controllers[path] = klass
+
+        # Add view directory
+        viewDir = viewDir or name
+        self.addViewDir(viewDir)
 
 
     def locateChild(self, ctx, segments):
@@ -20,19 +43,20 @@ class AppController(rend.Page):
             return rend.NotFound
 
         contname = segments[0]
-        if not AppController.controllers.has_key(contname):
+        if not self.controllers.has_key(contname):
             return rend.NotFound
         
-        contklass = AppController.controllers[contname]
-        return contklass(ctx, segments)._render()
+        contklass = self.controllers[contname]
+        return contklass(ctx, segments, self)._render()
 
 
 
 class BaseController:
-    def __init__(self, ctx, segments):
+    def __init__(self, ctx, segments, tlookup):
         self.ctx = ctx
         self.segments = segments
         self.name = segments[0]
+        self.tlookup = tlookup
         
         self.action = 'index'
         if len(segments) > 1 and segments[1] != '':
@@ -42,6 +66,12 @@ class BaseController:
         if len(segments) > 2:
             self.id = segments[2]
 
+
+    def view(self, args, name=None):
+        name = name or self.action
+        temp = self.tlookup.get_template("%s.phtml" % name)
+        return temp.render(**args)
+        
 
     def _render(self):
         func = getattr(self, self.action, None)
