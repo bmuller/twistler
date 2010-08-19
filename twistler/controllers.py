@@ -1,6 +1,7 @@
 from nevow import rend, inevow, static
 from twisted.web.util import Redirect
 from mako.lookup import TemplateLookup
+from mako.exceptions import TemplateLookupException
 import os
 
 class AppController(rend.Page):
@@ -12,51 +13,50 @@ class AppController(rend.Page):
         """
         # this is the root of our views
         self.viewsDir = viewsDir
-        self.templateDirs = [viewsDir]
         self.templateCacheDir = templateCacheDir
-        self.addViewDir('layout')
         self.controllers = {}
         
 
-    def addViewDir(self, dir):
-        self.templateDirs.append(os.path.join(self.viewsDir, dir))
-        self.tlookup = TemplateLookup(directories=self.templateDirs, module_directory=self.templateCacheDir)
+    def addViewDir(self, klass, viewDir):
+        viewDir = viewDir or BaseController.controllerName(klass)
+        templateDirs = [os.path.join(self.viewsDir, 'layout'), os.path.join(self.viewsDir, viewDir)]
+        klass.template_lookup = TemplateLookup(directories=templateDirs, module_directory=self.templateCacheDir)
         
 
     def addController(self, klass, paths=None, viewDir=None):
         """
         viewDir will be relative to the viewsDir param in the constructor.
         """
-        name = klass.__name__[:-10].lower()
+        name = BaseController.controllerName(klass)
         self.controllers[name] = klass        
         paths = paths or []
         for path in paths:
             self.controllers[path] = klass
 
         # Add view directory
-        viewDir = viewDir or name
-        self.addViewDir(viewDir)
+        self.addViewDir(klass, viewDir)
 
 
     def locateChild(self, ctx, segments):
         if len(segments) == 0:
             return rend.NotFound
 
-        contname = segments[0]
-        if not self.controllers.has_key(contname):
+        # rootpath is most often the controller name
+        rootpath = segments[0]
+        if not self.controllers.has_key(rootpath):
             return rend.NotFound
         
-        contklass = self.controllers[contname]
-        return contklass(ctx, segments, self)._render()
+        contklass = self.controllers[rootpath]
+        return contklass(ctx, segments)._render()
 
 
 
 class BaseController:
-    def __init__(self, ctx, segments, tlookup):
+    def __init__(self, ctx, segments):
         self.ctx = ctx
         self.segments = segments
-        self.name = segments[0]
-        self.tlookup = tlookup
+        self.name = BaseController.controllerName(self.__class__)
+        self.rootPath = segments[0]
         
         self.action = 'index'
         if len(segments) > 1 and segments[1] != '':
@@ -67,21 +67,42 @@ class BaseController:
             self.id = segments[2]
 
 
-    def view(self, args, name=None):
+    @classmethod
+    def controllerName(klass, controllerKlass):
+        name = controllerKlass.__name__
+        if not name.endswith('Controller'):
+            raise RuntimeError, "%s is impropperly named: name should have 'Controller' suffix" % name
+        return name[:-10].lower()
+
+
+    def getViewArgs(self, givenArgs=None):
+        args = {}
+        for key in ['segments', 'name', 'rootPath', 'action', 'id']:
+            args[key] = getattr(self, key)
+        if givenArgs is not None:
+            args.update(givenArgs)
+        return args
+
+
+    def view(self, args=None, name=None):
         name = name or self.action
-        temp = self.tlookup.get_template("%s.phtml" % name)
-        return temp.render(**args)
-        
+        try:
+            temp = self.__class__.template_lookup.get_template("%s.phtml" % name)
+            args = self.getViewArgs(args)
+            return temp.render(**args)
+        except TemplateLookupException:
+            return rend.NotFound
+
 
     def _render(self):
         func = getattr(self, self.action, None)
         if func is not None and callable(func):
             return func(self.ctx, self.id), ""
-        return rend.NotFound
+        return self.view(), ""
 
 
     def path(self, controller=None, action=None, id=None):
-        controller = controller or self.name
+        controller = controller or self.rootPath
         action = action or self.action
         
         url = inevow.IRequest(self.ctx).URLPath().child(controller).child(action)
