@@ -1,4 +1,5 @@
 from nevow import rend, inevow, static
+from twisted.web.util import Redirect
 
 
 class AppController(rend.Page):
@@ -23,13 +24,16 @@ class AppController(rend.Page):
             return rend.NotFound
         
         contklass = AppController.controllers[contname]
-        return contklass(segments)._render(ctx)
+        return contklass(ctx, segments)._render()
 
 
 
 class BaseController:
-    def __init__(self, segments):
+    def __init__(self, ctx, segments):
+        self.ctx = ctx
         self.segments = segments
+        self.name = segments[0]
+        
         self.action = 'index'
         if len(segments) > 1 and segments[1] != '':
             self.action = segments[1]
@@ -39,10 +43,10 @@ class BaseController:
             self.id = segments[2]
 
 
-    def _render(self, ctx):
+    def _render(self):
         func = getattr(self, self.action, None)
         if func is not None and callable(func):
-            return func(ctx, self.id), ""
+            return func(self.ctx, self.id), ""
         return rend.NotFound
 
 
@@ -62,9 +66,11 @@ class StaticController(BaseController):
     PATH = "."
     KWARGS = {}
     
-    def _render(self, ctx):
+    def _render(self):
        f = static.File(self.__class__.PATH, **self.__class__.KWARGS)
        if len(self.segments) > 1:
-           return f.locateChild(ctx, self.segments[1:])
-       return f.locateChild(ctx, [''])
+           return f.locateChild(self.ctx, self.segments[1:])
+       self.action = ""
+       return Redirect(self.path()), ""
+
         
