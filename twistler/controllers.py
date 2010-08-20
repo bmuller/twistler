@@ -1,8 +1,10 @@
 from nevow import rend, inevow, static
 from twisted.web.util import Redirect
+from twisted.python import log
 from mako.lookup import TemplateLookup
 from mako.exceptions import TemplateLookupException
 import os
+
 
 class AppController(rend.Page):
     addSlash = True
@@ -19,8 +21,9 @@ class AppController(rend.Page):
 
     def addViewDirs(self, klass, viewDirs):
         viewDirs = viewDirs or []
+        
         # try a view directory with the same name as this controller
-        viewDirs.append(BaseController.controllerName(klass))
+        viewDirs = viewDirs + [BaseController.controllerName(klass)]
 
         templateDirs = []
         for viewDir in viewDirs:
@@ -39,7 +42,7 @@ class AppController(rend.Page):
         paths = paths or []
         for path in paths:
             self.controllers[path] = klass
-
+        
         # Add view directory
         self.addViewDirs(klass, viewDirs)
 
@@ -47,7 +50,7 @@ class AppController(rend.Page):
     def locateChild(self, ctx, segments):
         if len(segments) == 0:
             return rend.NotFound
-
+        
         # rootpath is most often the controller name
         rootpath = segments[0]
         if not self.controllers.has_key(rootpath):
@@ -58,7 +61,7 @@ class AppController(rend.Page):
 
 
 
-class BaseController:
+class BaseController(rend.Page):
     def __init__(self, ctx, segments):
         self.ctx = ctx
         self.segments = segments
@@ -72,6 +75,7 @@ class BaseController:
         self.id = None
         if len(segments) > 2:
             self.id = segments[2]
+        self.params = {}
 
 
     @classmethod
@@ -87,30 +91,39 @@ class BaseController:
         return inevow.ISession(self.ctx)
 
 
+    def addParams(self, *names):
+        for name in names:
+            if not self.params.has_key(name):
+                self.params[name] = self.ctx.arg(name, '')
+
+
     def getDefaultViewArgs(self):
         return {}
 
 
     def getViewArgs(self, givenArgs=None):
-        args = {}
+        # start with default of whatever our params are set to
+        args = self.params
         for key in ['segments', 'name', 'rootPath', 'action', 'id']:
             args[key] = getattr(self, key)
+        args['controller'] = self
             
         # allow defaults to be easily set
-        args.update(self.getDefaultViewArgs())
+        defaults = self.getDefaultViewArgs()
+        defaults.update(args)
         
         if givenArgs is not None:
-            args.update(givenArgs)
+            defaults.update(givenArgs)
             
-        return args
+        return defaults
 
 
-    def view(self, args=None, name=None):
-        name = name or self.action
+    def view(self, args=None, action=None):
+        action = action or self.action
         temp = None        
 
         try:
-            temp = self.__class__.template_lookup.get_template("%s.mako" % name)
+            temp = self.__class__.template_lookup.get_template("%s.mako" % action)
         except TemplateLookupException:
             return rend.NotFound
         
@@ -139,6 +152,10 @@ class BaseController:
             url = url.child(str(id))
             
         return url
+
+
+    def redirect(self, url):
+        return Redirect(url)
         
 
 
@@ -151,6 +168,6 @@ class StaticController(BaseController):
        if len(self.segments) > 1:
            return f.locateChild(self.ctx, self.segments[1:])
        self.action = ""
-       return Redirect(self.path()), ""
+       return self.redirect(self.path()), ""
 
         
