@@ -17,13 +17,20 @@ class AppController(rend.Page):
         self.controllers = {}
         
 
-    def addViewDir(self, klass, viewDir):
-        viewDir = viewDir or BaseController.controllerName(klass)
-        templateDirs = [os.path.join(self.viewsDir, 'layout'), os.path.join(self.viewsDir, viewDir)]
+    def addViewDirs(self, klass, viewDirs):
+        viewDirs = viewDirs or []
+        # try a view directory with the same name as this controller
+        viewDirs.append(BaseController.controllerName(klass))
+
+        templateDirs = []
+        for viewDir in viewDirs:
+            # make this path: <viewsDir>/<viewDir which is controllername>
+            templateDirs.append(os.path.join(self.viewsDir, viewDir))
+        templateDirs = filter(os.path.exists, templateDirs)
         klass.template_lookup = TemplateLookup(directories=templateDirs, module_directory=self.templateCacheDir)
         
 
-    def addController(self, klass, paths=None, viewDir=None):
+    def addController(self, klass, paths=None, viewDirs=None):
         """
         viewDir will be relative to the viewsDir param in the constructor.
         """
@@ -34,7 +41,7 @@ class AppController(rend.Page):
             self.controllers[path] = klass
 
         # Add view directory
-        self.addViewDir(klass, viewDir)
+        self.addViewDirs(klass, viewDirs)
 
 
     def locateChild(self, ctx, segments):
@@ -75,33 +82,55 @@ class BaseController:
         return name[:-10].lower()
 
 
+    @property
+    def session(self):
+        return inevow.ISession(self.ctx)
+
+
+    def getDefaultViewArgs(self):
+        return {}
+
+
     def getViewArgs(self, givenArgs=None):
         args = {}
         for key in ['segments', 'name', 'rootPath', 'action', 'id']:
             args[key] = getattr(self, key)
+            
+        # allow defaults to be easily set
+        args.update(self.getDefaultViewArgs())
+        
         if givenArgs is not None:
             args.update(givenArgs)
+            
         return args
 
 
     def view(self, args=None, name=None):
         name = name or self.action
+        temp = None        
+
         try:
-            temp = self.__class__.template_lookup.get_template("%s.phtml" % name)
-            args = self.getViewArgs(args)
-            return temp.render(**args)
+            temp = self.__class__.template_lookup.get_template("%s.mako" % name)
         except TemplateLookupException:
             return rend.NotFound
+        
+        args = self.getViewArgs(args)
+        return temp.render(**args)
 
 
     def _render(self):
         func = getattr(self, self.action, None)
         if func is not None and callable(func):
-            return func(self.ctx, self.id), ""
-        return self.view(), ""
+            result = func(self.ctx)
+        else:
+            result = self.view()
+
+        if result != rend.NotFound:
+            return result, ""
+        return result
 
 
-    def path(self, controller=None, action=None, id=None):
+    def path(self, action=None, controller=None, id=None):
         controller = controller or self.rootPath
         action = action or self.action
         
