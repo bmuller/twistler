@@ -15,9 +15,13 @@ def form(context, action="", method="post"):
     return ''
 
 
-def maketag(context, tag, default, kwargs):
+def maketag(context, tag, default, kwargs, content=None):
     default.update(kwargs)
-    context.write(flat.flatten(tag(**default)))
+    if content is not None:
+        t = tag(**default)[content]
+    else:
+        t = tag(**default)
+    context.write(flat.flatten(t))
     return ""
 
 
@@ -31,7 +35,18 @@ def text(context, **kwargs):
     return maketag(context, tags.input, default, kwargs)
 
 
+def textarea(context, **kwargs):
+    default = {'cols': "60", 'rows': "10", 'name': "textarea"}
+    content = kwargs['value']
+    kwargs['value'] = ""
+    return maketag(context, tags.textarea, default, kwargs, content)
+
+
 def password(context, **kwargs):
     default = {'size': "20", 'value': "", 'name': "password", "type": "password"}
     return maketag(context, tags.input, default, kwargs)
 
+
+def link(context, **kwargs):
+    content = kwargs.get('value', kwargs.get('href', ""))
+    return maketag(context, tags.a, {}, kwargs, content)

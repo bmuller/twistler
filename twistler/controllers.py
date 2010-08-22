@@ -23,14 +23,16 @@ class AppController(rend.Page):
         viewDirs = viewDirs or []
         
         # try a view directory with the same name as this controller
-        viewDirs = viewDirs + [BaseController.controllerName(klass)]
+        cname = BaseController.controllerName(klass)
+        viewDirs = viewDirs + [cname]
 
         templateDirs = []
         for viewDir in viewDirs:
             # make this path: <viewsDir>/<viewDir which is controllername>
             templateDirs.append(os.path.join(self.viewsDir, viewDir))
         templateDirs = filter(os.path.exists, templateDirs)
-        klass.template_lookup = TemplateLookup(directories=templateDirs, module_directory=self.templateCacheDir)
+        cachedir = os.path.join(self.templateCacheDir, cname)
+        klass.template_lookup = TemplateLookup(directories=templateDirs, module_directory=cachedir)
         
 
     def addController(self, klass, paths=None, viewDirs=None):
@@ -55,7 +57,7 @@ class AppController(rend.Page):
         rootpath = segments[0]
         if not self.controllers.has_key(rootpath):
             return rend.NotFound
-        
+
         contklass = self.controllers[rootpath]
         return contklass(ctx, segments)._render()
 
@@ -65,7 +67,6 @@ class BaseController(rend.Page):
     def __init__(self, ctx, segments):
         self.ctx = ctx
         self.segments = segments
-        self.name = BaseController.controllerName(self.__class__)
         self.rootPath = segments[0]
         
         self.action = 'index'
@@ -104,8 +105,10 @@ class BaseController(rend.Page):
     def getViewArgs(self, givenArgs=None):
         # start with default of whatever our params are set to
         args = self.params
-        for key in ['segments', 'name', 'rootPath', 'action', 'id']:
-            args[key] = getattr(self, key)
+        for key in ['segments', 'rootPath', 'action', 'id']:
+            # don't overwrite something already set in the params
+            if not args.has_key(key):
+                args[key] = getattr(self, key)
         args['controller'] = self
             
         # allow defaults to be easily set
@@ -119,16 +122,27 @@ class BaseController(rend.Page):
 
 
     def view(self, args=None, action=None):
+        # set the last args used, so if this template calls include
+        # all of the same args will be available
+        self.lastargs = self.getViewArgs(args)
+        return self.include(action)
+        
+
+    def include(self, action=None):
+        """
+        This can be called from templates
+        """
         action = action or self.action
         temp = None        
 
         try:
+            logargs = (self.__class__.__name__, self.__class__.template_lookup.directories, action)
+            log.msg("%s: looking in %s for view %s" % logargs)
             temp = self.__class__.template_lookup.get_template("%s.mako" % action)
         except TemplateLookupException:
             return rend.NotFound
-        
-        args = self.getViewArgs(args)
-        return temp.render(**args)
+
+        return temp.render(**self.lastargs)
 
 
     def _render(self):
