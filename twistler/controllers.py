@@ -80,6 +80,11 @@ class BaseController(rend.Page):
 
 
     @classmethod
+    def isValidAction(klass, action):
+        return not action.startswith('_') and not action in dir(BaseController)
+
+
+    @classmethod
     def controllerName(klass, controllerKlass):
         name = controllerKlass.__name__
         if not name.endswith('Controller'):
@@ -105,6 +110,8 @@ class BaseController(rend.Page):
     def getViewArgs(self, givenArgs=None):
         # start with default of whatever our params are set to
         args = self.params
+        args['message'] = self.message
+        log.msg("args by default: %s" % str(args))
         for key in ['segments', 'rootPath', 'action', 'id']:
             # don't overwrite something already set in the params
             if not args.has_key(key):
@@ -146,15 +153,32 @@ class BaseController(rend.Page):
 
 
     def _render(self):
+        if not BaseController.isValidAction(self.action):
+            return rend.NotFound
+        
         func = getattr(self, self.action, None)
         if func is not None and callable(func):
             result = func(self.ctx)
         else:
             result = self.view()
 
+        # after rendering, we can reset our session message value if necessary
+        self._resetMessage()
+        
         if result != rend.NotFound:
             return result, ""
         return result
+
+
+    def _resetMessage(self):
+        if not hasattr(self.session, 'message'):
+            self.session.message = ""
+        elif self.session.message == "":
+            pass
+        elif self.session.message == getattr(self.session, '_message', ''):
+            self.session.message = self.session._message = ""
+        else:
+            self.session._message = self.session.message        
 
 
     def path(self, action=None, controller=None, id=None):
@@ -170,7 +194,16 @@ class BaseController(rend.Page):
 
     def redirect(self, url):
         return Redirect(url)
-        
+
+
+    @property
+    def message(self):
+        return getattr(self.session, 'message', '')
+
+
+    @message.setter
+    def message(self, value):
+        self.session.message = value
 
 
 class StaticController(BaseController):
