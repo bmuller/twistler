@@ -111,7 +111,6 @@ class BaseController(rend.Page):
         # start with default of whatever our params are set to
         args = self.params
         args['message'] = self.message
-        log.msg("args by default: %s" % str(args))
         for key in ['segments', 'rootPath', 'action', 'id']:
             # don't overwrite something already set in the params
             if not args.has_key(key):
@@ -182,14 +181,20 @@ class BaseController(rend.Page):
 
 
     def path(self, action=None, controller=None, id=None):
+        # only when neither action nor controller are explicitly
+        # specified do we pull the id from the current path
+        if action is None and controller is None:
+            id = id or self.id
+            
         controller = controller or self.rootPath
         action = action or self.action
-        
-        url = inevow.IRequest(self.ctx).URLPath().child(controller).child(action)
-        if id is not None:
-            url = url.child(str(id))
-            
-        return url
+
+        return self.request.URLPath().child(controller).child(action).child(id)
+
+
+    @property
+    def request(self):
+        return inevow.IRequest(self.ctx)
 
 
     def redirect(self, url):
@@ -218,3 +223,4 @@ class StaticController(BaseController):
        return self.redirect(self.path()), ""
 
         
+NotFound = rend.NotFound
