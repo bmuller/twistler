@@ -30,6 +30,15 @@ def submit(context, **kwargs):
     return maketag(context, tags.input, default, kwargs)
 
 
+def checkbox(context, **kwargs):
+    default = {'type': "checkbox", 'id': "checkbox", "value": '1'}
+    if kwargs.has_key('checked') and kwargs['checked'] in [1, '1', 'checked']:
+        kwargs['checked'] = "checked"
+    elif kwargs.has_key('checked'):
+        del kwargs['checked']
+    return maketag(context, tags.input, default, kwargs)
+
+
 def text(context, **kwargs):
     default = {'size': "20", 'value': "", 'name': "text", 'type': "text"}
     return maketag(context, tags.input, default, kwargs)
