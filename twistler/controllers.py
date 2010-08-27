@@ -59,15 +59,16 @@ class AppController(rend.Page):
             return rend.NotFound
 
         contklass = self.controllers[rootpath]
-        return contklass(ctx, segments)._render()
+        return contklass(self, ctx, segments)._render()
 
 
 
 class BaseController(rend.Page):
-    def __init__(self, ctx, segments):
+    def __init__(self, appcontroller, ctx, segments):
         self.ctx = ctx
         self.segments = segments
         self.rootPath = segments[0]
+        self.appcontroller = appcontroller
         
         self.action = 'index'
         if len(segments) > 1 and segments[1] != '':
@@ -180,7 +181,10 @@ class BaseController(rend.Page):
             self.session._message = self.session.message        
 
 
-    def path(self, action=None, controller=None, id=None):
+    def path(self, action=None, **kwargs):
+        controller = kwargs.pop('controller', None)
+        id = kwargs.pop('id', None)
+
         # only when neither action nor controller are explicitly
         # specified do we pull the id from the current path
         if action is None and controller is None:
@@ -189,7 +193,10 @@ class BaseController(rend.Page):
         controller = controller or self.rootPath
         action = action or self.action
 
-        return self.request.URLPath().child(controller).child(action).child(id)
+        path = self.request.URLPath().child(controller).child(action).child(id)
+        for name, value in kwargs.items():
+            path.add(name, value)
+        return path
 
 
     @property
