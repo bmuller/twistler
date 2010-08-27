@@ -77,7 +77,7 @@ class BaseController(rend.Page):
         self.id = None
         if len(segments) > 2:
             self.id = segments[2]
-        self.params = {}
+        self.params = {'id': self.id}
 
 
     @classmethod
@@ -192,10 +192,12 @@ class BaseController(rend.Page):
             
         controller = controller or self.rootPath
         action = action or self.action
-
+        
         path = self.request.URLPath().child(controller).child(action).child(id)
+        # clear all query args except the ones passed in
+        path._querylist = []
         for name, value in kwargs.items():
-            path.add(name, value)
+            path = path.add(name, value)
         return path
 
 

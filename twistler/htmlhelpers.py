@@ -44,6 +44,11 @@ def text(context, **kwargs):
     return maketag(context, tags.input, default, kwargs)
 
 
+def hidden(context, **kwargs):
+    default = {'value': "", 'name': "hidden", 'type': "hidden"}
+    return maketag(context, tags.input, default, kwargs)
+
+
 def textarea(context, **kwargs):
     default = {'cols': "60", 'rows': "10", 'name': "textarea"}
     content = kwargs['value']
