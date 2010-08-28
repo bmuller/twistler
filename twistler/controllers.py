@@ -31,7 +31,10 @@ class AppController(rend.Page):
             # make this path: <viewsDir>/<viewDir which is controllername>
             templateDirs.append(os.path.join(self.viewsDir, viewDir))
         templateDirs = filter(os.path.exists, templateDirs)
-        cachedir = os.path.join(self.templateCacheDir, cname)
+        if self.templateCacheDir is not None:
+            cachedir = os.path.join(self.templateCacheDir, cname)
+        else:
+            cachedir = None
         klass.template_lookup = TemplateLookup(directories=templateDirs, module_directory=cachedir)
         
 
@@ -181,7 +184,7 @@ class BaseController(rend.Page):
             self.session._message = self.session.message        
 
 
-    def path(self, action=None, **kwargs):
+    def path(self, action=None, clear_query=True, **kwargs):
         controller = kwargs.pop('controller', None)
         id = kwargs.pop('id', None)
 
@@ -195,7 +198,8 @@ class BaseController(rend.Page):
         
         path = self.request.URLPath().child(controller).child(action).child(id)
         # clear all query args except the ones passed in
-        path._querylist = []
+        if clear_query:
+            path._querylist = []
         for name, value in kwargs.items():
             path = path.add(name, value)
         return path
